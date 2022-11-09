@@ -352,11 +352,6 @@ let center = Complex({re: -0.2, im: 0.1});
 function render() {
 	const radius = Complex(1).sub(center).abs()
 
-	if (Complex(-1.04).sub(center).abs() > radius) { return; }
-	if (Complex({re:  0, im: -2}).sub(center).abs() < radius) { return; }
-	if (Complex({re:  0, im:  2}).sub(center).abs() < radius) { return; }
-	if (Complex({re: -2, im:  0}).sub(center).abs() < radius) { return; }
-
 	const input_circle = circle(center, radius, 100);
 
 	ctx1.clearRect(0, 0, WIDTH, HEIGHT);
@@ -366,7 +361,12 @@ function render() {
 	draw_grid(ctx1);
 	draw_grid(ctx2);
 	draw_grid(ctx3);
-	stroke_from_points(ctx1, input_circle, 3);
+
+	let color = "black";
+	if (Complex(-1.04).sub(center).abs() > radius) {
+		color = "red";
+	}
+	stroke_from_points(ctx1, input_circle, 3, color);
 
 	const airfoil = []
 	for (const point of input_circle) {
@@ -378,9 +378,9 @@ function render() {
 		airfoil2.push(karman_trefftz(point));
 	}
 
-	stroke_from_points(ctx2, airfoil, 3);
+	stroke_from_points(ctx2, airfoil, 3, color);
 
-	stroke_from_points(ctx3, airfoil2, 3);
+	stroke_from_points(ctx3, airfoil2, 3, color);
 }
 
 render();
