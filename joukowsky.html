@@ -6,8 +6,8 @@
 		body {
 			font-family: monospace;
 			font-size: 1.3em;
-			width: fit-content;
-			margin-left: 30px;
+			width: 100%;
+			margin: 0;
 		}
 		h1 {
 			font-size: 2.5em;
@@ -17,11 +17,12 @@
 			flex-direction: column;
 			align-items: center;
 		}
-		#both_canvases_container {
+		#all_canvases_container {
 			display: flex;
 			grid-gap: 50px;
 			flex-wrap: wrap;
 			align-items: center;
+			justify-content: center;
 		}
 		.canvas_container{
 			display: flex;
@@ -35,6 +36,7 @@
 		}
 		canvas {
 			border: 2px solid #000000;
+			touch-action: none;
 		}
 	</style>
 </head>
@@ -42,13 +44,13 @@
 
 <div id="container">
 	<h1>Joukowsky Transform</h1>
-	<div id="both_canvases_container">
+	<div id="all_canvases_container">
 		<div class="canvas_container">
 			<h2> Input </h2>
 			<canvas
 				id="canvas1"
-				width="600"
-				height="600"
+				width="550"
+				height="550"
 				style="cursor: pointer;"
 			></canvas>
 		</div>
@@ -57,8 +59,8 @@
 			<h2> Joukowsky </h2>
 			<canvas
 				id="canvas2"
-				width="600"
-				height="600"
+				width="550"
+				height="550"
 			></canvas>
 		</div>
 
@@ -80,8 +82,8 @@
 			</div>
 			<canvas
 				id="canvas3"
-				width="600"
-				height="600"
+				width="550"
+				height="550"
 			></canvas>
 		</div>
 	</div>
@@ -141,14 +143,14 @@ window.onresize  = function(e){ calculate_offset(); }
 canvas1.onresize = function(e){ calculate_offset(); }
 
 let is_dragging = false
-canvas1.onmousedown = function(e) {
+canvas1.onpointerdown = function(e) {
 	e.preventDefault();
 	e.stopPropagation();
 
 	is_dragging = true;
 };
 
-canvas1.onmousemove = function(e) {
+canvas1.onpointermove = function(e) {
 	if (!is_dragging) { return; }
 
 	e.preventDefault();
@@ -165,19 +167,23 @@ canvas1.onmousemove = function(e) {
 	render();
 }
 
-canvas1.onmouseup = function(e) {
+canvas1.onpointerup = function(e) {
 	e.preventDefault();
 	e.stopPropagation();
 
 	is_dragging = false;
 }
 
-canvas1.onmouseleave = function(e) {
+canvas1.onpointerleave = function(e) {
 	e.preventDefault();
 	e.stopPropagation();
 
 	is_dragging = false;
 }
+
+// canvas1.ontouchstart = canvas1.onmousedown;
+// canvas1.ontouchend = canvas1.onmouseup;
+// canvas1.ontouchmove = canvas1.onmousemove;
 
 function overSampleCanvas(tgtCanvas, ctx, factor) {
 	const width = tgtCanvas.width;
