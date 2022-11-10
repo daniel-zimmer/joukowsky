@@ -125,8 +125,8 @@ let ctx2 = canvas2.getContext("2d");
 let canvas3 = document.getElementById("canvas3");
 let ctx3 = canvas3.getContext("2d");
 
-const RE_SIZE = 2.5;
-const IM_SIZE = 2.5;
+const RE_SIZE = 12;
+const IM_SIZE = 12;
 const WIDTH = ctx1.canvas.clientWidth;
 const HEIGHT = ctx1.canvas.clientHeight;
 
@@ -180,10 +180,6 @@ canvas1.onpointerleave = function(e) {
 
 	is_dragging = false;
 }
-
-// canvas1.ontouchstart = canvas1.onmousedown;
-// canvas1.ontouchend = canvas1.onmouseup;
-// canvas1.ontouchmove = canvas1.onmousemove;
 
 function overSampleCanvas(tgtCanvas, ctx, factor) {
 	const width = tgtCanvas.width;
@@ -348,9 +344,76 @@ function karman_trefftz(z) {
 	return nominator.div(denominator).mul(n*b);
 }
 
-let center = Complex({re: -0.2, im: 0.1});
+function compute_velocities(step, R) {
+	const U = 1;//Complex({re: 1, im: 0});
+	const velocities = [];
+	let max_velocity_abs = 0;
+	for (let j = -IM_SIZE; j < IM_SIZE+step/2; j+=step) {
+		for (let i = -RE_SIZE; i < RE_SIZE+step/2; i+=step) {
+			const point = Complex({re: i, im: j});
+			const r = point.abs(); const r_2 = r*r; const R_2 = R*R
+			if (r < R) { continue; }
+
+			const V_r = U*(1 - (R_2)/(r_2))*Math.cos(point.arg());
+			const V_theta = -U*(1 + (R_2)/(r_2))*Math.sin(point.arg());
+			const V = Complex({r: V_r, phi: V_theta});
+			if (V.abs() > max_velocity_abs) { max_velocity_abs = V.abs(); }
+
+			velocities.push({point: point, V: V});
+		}
+	}
+
+	return {max: max_velocity_abs, velocities: velocities};
+}
+
+function stroke_vector(ctx, origin, vector) {
+	const origin_coord = point2coord(origin);
+	origin.re += vector.re; origin.im += vector.im;
+	const tip_coord = point2coord(origin);
+
+	ctx.lineWidth = 2;
+	ctx.strokeStyle = "black";
+	ctx.beginPath();
+	ctx.moveTo(origin_coord.x, origin_coord.y);
+	ctx.lineTo(tip_coord.x, tip_coord.y);
+	ctx.stroke();
+	ctx.fillRect(tip_coord.x-2, tip_coord.y-2, 4, 4);
+}
+
+function stroke_velocities(ctx, velocities, step) {
+	for (const velocity of velocities.velocities) {
+			velocity.V.re /= velocities.max;
+			velocity.V.im /= velocities.max;
+			velocity.V.re *= step;
+			velocity.V.im *= step;
+			stroke_vector(ctx, velocity.point, velocity.V);
+	}
+}
+
+function compute_velocity_grid(step, R) {
+	const rows = []
+	for (let j = -IM_SIZE; j < IM_SIZE+step/2; j+=step) {
+		const row = []
+		for (let i = -RE_SIZE; i < RE_SIZE + step / 2; i += step) {
+			const w = Complex({re: i, im: j});
+			const r = w.abs(); const R_2 = R*R;
+
+			let sign = 1; if (w.re < 0) { sign = -1; }
+			const z = (w.add(Complex(sign).mul(w.pow(2).sub(4*R_2).sqrt()) ).mul(0.5) );
+
+			row.push(z);
+		}
+		rows.push(row);
+	}
+
+	return rows
+}
+
+// let center = Complex({re: -0.2, im: 0.1});
+let center = Complex({re: 0, im: 0});
 function render() {
-	const radius = Complex(1).sub(center).abs()
+	//const radius = Complex(1).sub(center).abs()
+	const radius = 3
 
 	const input_circle = circle(center, radius, 100);
 
@@ -358,12 +421,16 @@ function render() {
 	ctx2.clearRect(0, 0, WIDTH, HEIGHT);
 	ctx3.clearRect(0, 0, WIDTH, HEIGHT);
 
+	const step = radius/2
+	const velocities = compute_velocities(step, radius);
+	stroke_velocities(ctx1, velocities, step);
+
 	draw_grid(ctx1);
 	draw_grid(ctx2);
 	draw_grid(ctx3);
 
 	let color = "black";
-	if (Complex(-1.04).sub(center).abs() > radius) {
+	if (Complex(-1.001).sub(center).abs() > radius) {
 		color = "red";
 	}
 	stroke_from_points(ctx1, input_circle, 3, color);
