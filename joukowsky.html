@@ -63,29 +63,6 @@
 				height="550"
 			></canvas>
 		</div>
-
-		<div class="canvas_container">
-			<div class="slider_container">
-				<h2> K&aacute;rm&aacute;n-Trefftz </h2>
-				<input
-					type="range"
-					min="0"
-					max="3.14"
-					step="0.01"
-					value="0.78"
-					id="slider"
-				>
-				<div
-					style="font-size: 1.4em; width: 120px"
-					id="alpha"
-				>&alpha;: 0.78</div>
-			</div>
-			<canvas
-				id="canvas3"
-				width="550"
-				height="550"
-			></canvas>
-		</div>
 	</div>
 </div>
 
@@ -122,11 +99,8 @@ let ctx1 = canvas1.getContext("2d");
 let canvas2 = document.getElementById("canvas2");
 let ctx2 = canvas2.getContext("2d");
 
-let canvas3 = document.getElementById("canvas3");
-let ctx3 = canvas3.getContext("2d");
-
-const RE_SIZE = 12;
-const IM_SIZE = 12;
+const RE_SIZE = 3;
+const IM_SIZE = 3;
 const WIDTH = ctx1.canvas.clientWidth;
 const HEIGHT = ctx1.canvas.clientHeight;
 
@@ -193,11 +167,10 @@ function overSampleCanvas(tgtCanvas, ctx, factor) {
 
 overSampleCanvas(canvas1, ctx1, 2);
 overSampleCanvas(canvas2, ctx2, 2);
-overSampleCanvas(canvas3, ctx3, 2);
 
 function coord2point(coord) {
 	return {
-		re: (coord.x - WIDTH/2)*(1.5/(WIDTH)),
+		re: (coord.x - WIDTH/2)*(2/(WIDTH)),
 		im: -(coord.y - WIDTH/2)*(2/(WIDTH)),
 	};
 }
@@ -250,6 +223,30 @@ function stroke_from_coords(ctx, coords, thickness, color) {
 	}
 	ctx.closePath();
 	ctx.stroke();
+}
+
+function stroke_vector(ctx, origin, vector) {
+	const origin_coord = point2coord(origin);
+	origin.re += vector.re; origin.im += vector.im;
+	const tip_coord = point2coord(origin);
+
+	ctx.lineWidth = 2;
+	ctx.strokeStyle = "black";
+	ctx.beginPath();
+	ctx.moveTo(origin_coord.x, origin_coord.y);
+	ctx.lineTo(tip_coord.x, tip_coord.y);
+	ctx.stroke();
+	ctx.fillRect(tip_coord.x-2, tip_coord.y-2, 4, 4);
+}
+
+function stroke_velocities(ctx, velocities, step) {
+	for (const velocity of velocities.velocities) {
+		velocity.V.re /= velocities.max;
+		velocity.V.im /= velocities.max;
+		velocity.V.re *= step;
+		velocity.V.im *= step;
+		stroke_vector(ctx, velocity.point, velocity.V);
+	}
 }
 
 function draw_grid(ctx) {
@@ -317,46 +314,55 @@ function circle(center, radius, npoints) {
 	return points;
 }
 
-/////////////////////////
-
-const slider_elem = document.getElementById("slider");
-const alpha_elem  = document.getElementById("alpha");
-let alpha = 0.78;
-slider_elem.oninput = function(e) {
-	alpha = slider_elem.value;
-	alpha_elem.removeChild(alpha_elem.firstChild);
-	alpha_elem.insertAdjacentHTML("afterbegin", "&alpha;: " + alpha.toString());
-	render();
-}
-
 ///////////////////////////
 
 function joukowsky(z) {
 	return z.add(z.inverse())
 }
 
-function karman_trefftz(z) {
-	const n = 2 - alpha/Math.PI;
-	const b = 1;
-	const nominator   = z.add(b).pow(n).add(z.sub(b).pow(n));
-	const denominator = z.add(b).pow(n).sub(z.sub(b).pow(n));
-
-	return nominator.div(denominator).mul(n*b);
+function inv_joukowsky(z) {
+	let w;
+	// z = z.neg()
+	if (z.re < 0) {
+		w = z.sub(z.pow(2).sub(4).sqrt()).div(2)
+	} else {
+		w = z.add(z.pow(2).sub(4).sqrt()).div(2)
+	}
+	return w
 }
 
-function compute_velocities(step, R) {
-	const U = 1;//Complex({re: 1, im: 0});
+function transformation(point, C) {
+	const new_radius = C.sub(1).abs()
+	return point.sub(C).div(new_radius);
+}
+
+function inv_transformation(point, C) {
+	const new_radius = C.sub(1).abs()
+	return point.mul(new_radius).add(C)
+}
+
+function transform_circle(points, C) {
+	const ret_points = [];
+	for (const point of points) {
+		ret_points.push(inv_transformation(point, C));
+	}
+	return ret_points;
+}
+
+function compute_joukowsky_velocities(step, C) {
 	const velocities = [];
 	let max_velocity_abs = 0;
 	for (let j = -IM_SIZE; j < IM_SIZE+step/2; j+=step) {
 		for (let i = -RE_SIZE; i < RE_SIZE+step/2; i+=step) {
 			const point = Complex({re: i, im: j});
-			const r = point.abs(); const r_2 = r*r; const R_2 = R*R
-			if (r < R) { continue; }
 
-			const V_r = U*(1 - (R_2)/(r_2))*Math.cos(point.arg());
-			const V_theta = -U*(1 + (R_2)/(r_2))*Math.sin(point.arg());
-			const V = Complex({r: V_r, phi: V_theta});
+			// V = A(1 - q / z_bar^2)
+			//const p = transformation(joukowsky(point), A)
+
+			const V = transformation(joukowsky(point), C).conjugate().pow(-2).neg().add(1)
+
+			if (V.abs() > 10) {continue; }
+
 			if (V.abs() > max_velocity_abs) { max_velocity_abs = V.abs(); }
 
 			velocities.push({point: point, V: V});
@@ -366,88 +372,62 @@ function compute_velocities(step, R) {
 	return {max: max_velocity_abs, velocities: velocities};
 }
 
-function stroke_vector(ctx, origin, vector) {
-	const origin_coord = point2coord(origin);
-	origin.re += vector.re; origin.im += vector.im;
-	const tip_coord = point2coord(origin);
-
-	ctx.lineWidth = 2;
-	ctx.strokeStyle = "black";
-	ctx.beginPath();
-	ctx.moveTo(origin_coord.x, origin_coord.y);
-	ctx.lineTo(tip_coord.x, tip_coord.y);
-	ctx.stroke();
-	ctx.fillRect(tip_coord.x-2, tip_coord.y-2, 4, 4);
-}
-
-function stroke_velocities(ctx, velocities, step) {
-	for (const velocity of velocities.velocities) {
-			velocity.V.re /= velocities.max;
-			velocity.V.im /= velocities.max;
-			velocity.V.re *= step;
-			velocity.V.im *= step;
-			stroke_vector(ctx, velocity.point, velocity.V);
-	}
-}
-
-function compute_velocity_grid(step, R) {
-	const rows = []
+function compute_velocities(step, C) {
+	const velocities = [];
+	let max_velocity_abs = 0;
 	for (let j = -IM_SIZE; j < IM_SIZE+step/2; j+=step) {
-		const row = []
-		for (let i = -RE_SIZE; i < RE_SIZE + step / 2; i += step) {
-			const w = Complex({re: i, im: j});
-			const r = w.abs(); const R_2 = R*R;
+		for (let i = -RE_SIZE; i < RE_SIZE+step/2; i+=step) {
+			const point = Complex({re: i, im: j});
+			const r = C.sub(1).abs();
+			if (point.sub(C).abs() < r) { continue; }
 
-			let sign = 1; if (w.re < 0) { sign = -1; }
-			const z = (w.add(Complex(sign).mul(w.pow(2).sub(4*R_2).sqrt()) ).mul(0.5) );
+			// V = A(1 - q / z_bar^2)
+			const p = transformation(point, C)
+			const V = p.conjugate().pow(-2).neg().add(1)
 
-			row.push(z);
+			if (V.abs() > max_velocity_abs) { max_velocity_abs = V.abs(); }
+
+			velocities.push({point: point, V: V});
 		}
-		rows.push(row);
 	}
 
-	return rows
+	return {max: max_velocity_abs, velocities: velocities};
 }
 
-// let center = Complex({re: -0.2, im: 0.1});
-let center = Complex({re: 0, im: 0});
+let center = Complex({re: -0.2, im: 0.1});
+const unit_circle = circle(Complex(0, 0), 1, 100);
 function render() {
-	//const radius = Complex(1).sub(center).abs()
-	const radius = 3
-
-	const input_circle = circle(center, radius, 100);
+	const radius = Complex(1).sub(center).abs()
 
 	ctx1.clearRect(0, 0, WIDTH, HEIGHT);
 	ctx2.clearRect(0, 0, WIDTH, HEIGHT);
-	ctx3.clearRect(0, 0, WIDTH, HEIGHT);
-
-	const step = radius/2
-	const velocities = compute_velocities(step, radius);
-	stroke_velocities(ctx1, velocities, step);
+	// ctx3.clearRect(0, 0, WIDTH, HEIGHT);
 
 	draw_grid(ctx1);
 	draw_grid(ctx2);
-	draw_grid(ctx3);
+	// draw_grid(ctx3);
 
 	let color = "black";
 	if (Complex(-1.001).sub(center).abs() > radius) {
 		color = "red";
 	}
+
+	const input_circle = transform_circle(unit_circle, center)
 	stroke_from_points(ctx1, input_circle, 3, color);
+
+	const step = RE_SIZE/10
+	const velocities = compute_velocities(step, center);
+	stroke_velocities(ctx1, velocities, step);
 
 	const airfoil = []
 	for (const point of input_circle) {
+		//airfoil.push(inv_joukowsky(joukowsky(point)));
 		airfoil.push(joukowsky(point));
 	}
-
-	const airfoil2 = []
-	for (const point of input_circle) {
-		airfoil2.push(karman_trefftz(point));
-	}
-
 	stroke_from_points(ctx2, airfoil, 3, color);
 
-	stroke_from_points(ctx3, airfoil2, 3, color);
+	const joukowsky_velocities = compute_joukowsky_velocities(step, center);
+	stroke_velocities(ctx2, joukowsky_velocities, step);
 }
 
 render();
