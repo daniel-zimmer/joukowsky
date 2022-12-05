@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<title>Joukowsky</title>
+	<title>Flow Around Cylinder</title>
 	<style>
 		body {
 			font-family: monospace;
@@ -43,24 +43,14 @@
 <body>
 
 <div id="container">
-	<h1>Joukowsky Transform</h1>
+	<h1>Flow Around Cylinder</h1>
 	<div id="all_canvases_container">
 		<div class="canvas_container">
-			<h2> Input </h2>
 			<canvas
 				id="canvas1"
 				width="550"
 				height="550"
 				style="cursor: pointer;"
-			></canvas>
-		</div>
-
-		<div class="canvas_container">
-			<h2> Joukowsky </h2>
-			<canvas
-				id="canvas2"
-				width="550"
-				height="550"
 			></canvas>
 		</div>
 	</div>
@@ -96,11 +86,8 @@ d.ZERO=new d(0,0);d.ONE=new d(1,0);d.I=new d(0,1);d.PI=new d(Math.PI,0);d.E=new 
 let canvas1 = document.getElementById("canvas1");
 let ctx1 = canvas1.getContext("2d");
 
-let canvas2 = document.getElementById("canvas2");
-let ctx2 = canvas2.getContext("2d");
-
-const RE_SIZE = 3;
-const IM_SIZE = 3;
+const RE_SIZE = 4;
+const IM_SIZE = 4;
 const WIDTH = ctx1.canvas.clientWidth;
 const HEIGHT = ctx1.canvas.clientHeight;
 
@@ -166,7 +153,6 @@ function overSampleCanvas(tgtCanvas, ctx, factor) {
 }
 
 overSampleCanvas(canvas1, ctx1, 2);
-overSampleCanvas(canvas2, ctx2, 2);
 
 function coord2point(coord) {
 	return {
@@ -320,17 +306,6 @@ function joukowsky(z) {
 	return z.add(z.inverse())
 }
 
-function inv_joukowsky(z) {
-	let w;
-	// z = z.neg()
-	if (z.re < 0) {
-		w = z.sub(z.pow(2).sub(4).sqrt()).div(2)
-	} else {
-		w = z.add(z.pow(2).sub(4).sqrt()).div(2)
-	}
-	return w
-}
-
 function transformation(point, C) {
 	const new_radius = C.sub(1).abs()
 	return point.sub(C).div(new_radius);
@@ -397,37 +372,18 @@ function compute_velocities(step, C) {
 let center = Complex({re: -0.2, im: 0.1});
 const unit_circle = circle(Complex(0, 0), 1, 100);
 function render() {
-	const radius = Complex(1).sub(center).abs()
 
 	ctx1.clearRect(0, 0, WIDTH, HEIGHT);
-	ctx2.clearRect(0, 0, WIDTH, HEIGHT);
-	// ctx3.clearRect(0, 0, WIDTH, HEIGHT);
 
 	draw_grid(ctx1);
-	draw_grid(ctx2);
-	// draw_grid(ctx3);
-
-	let color = "black";
-	if (Complex(-1.001).sub(center).abs() > radius) {
-		color = "red";
-	}
 
 	const input_circle = transform_circle(unit_circle, center)
-	stroke_from_points(ctx1, input_circle, 3, color);
+	stroke_from_points(ctx1, input_circle, 4);
 
-	const step = RE_SIZE/10
+	const step = RE_SIZE/11
 	const velocities = compute_velocities(step, center);
 	stroke_velocities(ctx1, velocities, step);
 
-	const airfoil = []
-	for (const point of input_circle) {
-		//airfoil.push(inv_joukowsky(joukowsky(point)));
-		airfoil.push(joukowsky(point));
-	}
-	stroke_from_points(ctx2, airfoil, 3, color);
-
-	const joukowsky_velocities = compute_joukowsky_velocities(step, center);
-	stroke_velocities(ctx2, joukowsky_velocities, step);
 }
 
 render();
