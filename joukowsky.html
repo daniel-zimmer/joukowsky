@@ -349,23 +349,49 @@ function transform_circle(points, C) {
 	return ret_points;
 }
 
-function compute_joukowsky_velocities(step, C) {
+function inside(point, vs) {
+	// ray-casting algorithm based on
+	// https://wrf.ecse.rpi.edu/Research/Short_Notes/pnpoly.html/pnpoly.html
+
+	let x = point.re, y = point.im;
+
+	let is_inside = false;
+	for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+		let xi = vs[i].re, yi = vs[i].im;
+		let xj = vs[j].re, yj = vs[j].im;
+
+		let intersect = ((yi > y) != (yj > y))
+				&& (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+		if (intersect) is_inside = !is_inside;
+	}
+
+	return is_inside;
+}
+
+function compute_joukowsky_velocities(step, C, airfoil) {
 	const velocities = [];
 	let max_velocity_abs = 0;
 	for (let j = -IM_SIZE; j < IM_SIZE+step/2; j+=step) {
 		for (let i = -RE_SIZE; i < RE_SIZE+step/2; i+=step) {
-			const point = Complex({re: i, im: j});
+			const z = Complex({re: i, im: j});
 
-			// V = A(1 - q / z_bar^2)
-			//const p = transformation(joukowsky(point), A)
+			if (inside(z, airfoil)) { continue; }
 
-			const V = transformation(joukowsky(point), C).conjugate().pow(-2).neg().add(1)
+			const R = C.sub(1).abs()
+			let a, b;
+			if (z.re > 0) {
+				a = z.pow(2).sub(4).sqrt().inverse().mul(z).add(1).div(2*R);
+				b = z.pow(2).sub(4).sqrt().add(z).div(2).sub(C).pow(2).mul(2).inverse().mul(z.pow(2).sub(4).sqrt().inverse().mul(z).add(1).mul(R));
+			} else {
+				a = z.pow(2).sub(4).sqrt().inverse().mul(z).neg().add(1).div(2*R);
+				b = z.pow(2).sub(4).sqrt().neg().add(z).div(2).sub(C).pow(2).mul(2).inverse().mul(z.pow(2).sub(4).sqrt().inverse().mul(z).neg().add(1).mul(R));
+			}
 
-			if (V.abs() > 10) {continue; }
+			const V = a.sub(b).conjugate();
 
 			if (V.abs() > max_velocity_abs) { max_velocity_abs = V.abs(); }
 
-			velocities.push({point: point, V: V});
+			velocities.push({point: z, V: V});
 		}
 	}
 
@@ -381,9 +407,8 @@ function compute_velocities(step, C) {
 			const r = C.sub(1).abs();
 			if (point.sub(C).abs() < r) { continue; }
 
-			// V = A(1 - q / z_bar^2)
-			const p = transformation(point, C)
-			const V = p.conjugate().pow(-2).neg().add(1)
+			const R = C.sub(1).abs()
+			const V = point.sub(C).pow(2).inverse().mul(R).neg().add(1/R).conjugate()
 
 			if (V.abs() > max_velocity_abs) { max_velocity_abs = V.abs(); }
 
@@ -394,6 +419,7 @@ function compute_velocities(step, C) {
 	return {max: max_velocity_abs, velocities: velocities};
 }
 
+let step_div = 11
 let center = Complex({re: -0.2, im: 0.1});
 const unit_circle = circle(Complex(0, 0), 1, 100);
 function render() {
@@ -401,11 +427,9 @@ function render() {
 
 	ctx1.clearRect(0, 0, WIDTH, HEIGHT);
 	ctx2.clearRect(0, 0, WIDTH, HEIGHT);
-	// ctx3.clearRect(0, 0, WIDTH, HEIGHT);
 
 	draw_grid(ctx1);
 	draw_grid(ctx2);
-	// draw_grid(ctx3);
 
 	let color = "black";
 	if (Complex(-1.001).sub(center).abs() > radius) {
@@ -415,7 +439,7 @@ function render() {
 	const input_circle = transform_circle(unit_circle, center)
 	stroke_from_points(ctx1, input_circle, 3, color);
 
-	const step = RE_SIZE/10
+	const step = RE_SIZE/step_div
 	const velocities = compute_velocities(step, center);
 	stroke_velocities(ctx1, velocities, step);
 
@@ -426,7 +450,7 @@ function render() {
 	}
 	stroke_from_points(ctx2, airfoil, 3, color);
 
-	const joukowsky_velocities = compute_joukowsky_velocities(step, center);
+	const joukowsky_velocities = compute_joukowsky_velocities(step, center, airfoil);
 	stroke_velocities(ctx2, joukowsky_velocities, step);
 }
 
